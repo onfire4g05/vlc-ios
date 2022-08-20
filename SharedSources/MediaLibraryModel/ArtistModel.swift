@@ -12,11 +12,12 @@
 class ArtistModel: AudioCollectionModel {
     typealias MLType = VLCMLArtist
 
-    var sortModel = SortModel([.alpha, .lastPlaybackDate, .nbAlbum])
+    var sortModel = SortModel([.alpha, .lastPlaybackDate, .nbAlbum, .lastPlaybackDate, .playCount])
 
     var observable = Observable<MediaLibraryBaseModelObserver>()
 
     var files = [VLCMLArtist]()
+    var fileArrayLock = NSRecursiveLock()
 
     var cellType: BaseCollectionViewCell.Type {
         return UserDefaults.standard.bool(forKey: "\(kVLCAudioLibraryGridLayout)\(name)") ? MediaGridCollectionCell.self : MediaCollectionViewCell.self
@@ -33,16 +34,28 @@ class ArtistModel: AudioCollectionModel {
     }
 
     required init(medialibrary: MediaLibraryService) {
+        defer {
+            fileArrayLock.unlock()
+        }
         self.medialibrary = medialibrary
         medialibrary.observable.addObserver(self)
+        fileArrayLock.lock()
         files = hideFeatArtists ? medialibrary.artists(listAll: false) : medialibrary.artists()
     }
 
     func append(_ item: VLCMLArtist) {
+        defer {
+            fileArrayLock.unlock()
+        }
+        fileArrayLock.lock()
         files.append(item)
     }
 
     private func addNewArtists(_ artists: [VLCMLArtist]) {
+        defer {
+            fileArrayLock.unlock()
+        }
+        fileArrayLock.lock()
         let newArtists = artists.filter() {
             for artist in files {
                 if artist.identifier() == $0.identifier() {
@@ -73,6 +86,10 @@ class ArtistModel: AudioCollectionModel {
 // MARK: - Sort
 extension ArtistModel {
     func sort(by criteria: VLCMLSortingCriteria, desc: Bool) {
+        defer {
+            fileArrayLock.unlock()
+        }
+        fileArrayLock.lock()
         files = hideFeatArtists ? medialibrary.artists(sortingCriteria: criteria, desc: desc, listAll: false) :
                                 medialibrary.artists(sortingCriteria: criteria, desc: desc, listAll: true)
         sortModel.currentSort = criteria
@@ -102,7 +119,9 @@ extension ArtistModel: MediaLibraryObserver {
 
     func medialibrary(_ medialibrary: MediaLibraryService,
                       didModifyArtistsWithIds artistsIds: [NSNumber]) {
-
+        defer {
+            fileArrayLock.unlock()
+        }
         let uniqueArtistsIds = Array(Set(artistsIds))
         var artists = [VLCMLArtist]()
 
@@ -114,6 +133,7 @@ extension ArtistModel: MediaLibraryObserver {
             artists.append(safeArtist)
         }
 
+        fileArrayLock.lock()
         files = swapModels(with: artists)
         addNewArtists(artists)
         filterGeneratedArtists()
@@ -123,6 +143,10 @@ extension ArtistModel: MediaLibraryObserver {
     }
 
     func medialibrary(_ medialibrary: MediaLibraryService, didDeleteArtistsWithIds artistsIds: [NSNumber]) {
+        defer {
+            fileArrayLock.unlock()
+        }
+        fileArrayLock.lock()
         files.removeAll {
             artistsIds.contains(NSNumber(value: $0.identifier()))
         }
@@ -132,6 +156,10 @@ extension ArtistModel: MediaLibraryObserver {
     }
 
     func medialibraryDidStartRescan() {
+        defer {
+            fileArrayLock.unlock()
+        }
+        fileArrayLock.lock()
         files.removeAll()
     }
 }

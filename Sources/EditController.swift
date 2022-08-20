@@ -18,6 +18,8 @@ protocol EditControllerDelegate: AnyObject {
     func editControllerGetCurrentThumbnail() -> UIImage?
     func editControllerGetAlbumHeaderSize(with width: CGFloat) -> CGSize
     func editControllerUpdateNavigationBar(offset: CGFloat)
+    func editControllerSetNavigationItemTitle(with title: String?)
+    func editControllerUpdateIsAllSelected(with allSelected: Bool)
 }
 
 class EditController: UIViewController {
@@ -54,6 +56,24 @@ class EditController: UIViewController {
         }
         selectedCellIndexPaths.removeAll()
         isAllSelected = false
+    }
+
+    func shouldResetCells(_ reset: Bool) {
+        guard reset else {
+            return
+        }
+
+        (0..<presentingView.numberOfSections).compactMap {
+            section -> [IndexPath]? in
+            return (0..<presentingView.numberOfItems(inSection: section)).compactMap({
+                item -> IndexPath? in
+                return IndexPath(item: item, section: section)
+            })}
+        .flatMap { $0 }.forEach { (indexPath) in
+            if let cell = presentingView.cellForItem(at: indexPath) as? MediaCollectionViewCell {
+                cell.showCheckmark(false)
+            }
+        }
     }
 
     func selectAll() {
@@ -124,6 +144,17 @@ private extension EditController {
         alertController.addAction(confirmAction)
 
         present(alertController, animated: true, completion: nil)
+    }
+
+    private func getTitle(for count: Int) -> String {
+        var title = "\(count) "
+        if count == 1 {
+            title += NSLocalizedString("SINGLE_ITEM_SELECTED", comment: "")
+        } else {
+            title += NSLocalizedString("MULTIPLE_ITEMS_SELECTED", comment: "")
+        }
+
+        return title
     }
 }
 
@@ -258,25 +289,56 @@ extension EditController: EditToolbarDelegate {
 extension EditController: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         selectedCellIndexPaths.insert(indexPath)
+        collectionView.selectItem(at: indexPath, animated: false, scrollPosition: .centeredHorizontally)
+
         if !selectedCellIndexPaths.isEmpty {
             delegate?.editControllerDidSelectMultipleItem(editContrller: self)
         }
         // Isolate selectionViewOverlay changes inside EditController
-        if let cell = collectionView.cellForItem(at: indexPath) as? BaseCollectionViewCell {
-            cell.selectionViewOverlay?.isHidden = false
-            cell.isSelected = true
+        var showOverlay: Bool = true
+
+        if collectionView.cellForItem(at: indexPath) is MediaCollectionViewCell {
+            showOverlay = false
         }
+
+        if let cell = collectionView.cellForItem(at: indexPath) as? BaseCollectionViewCell {
+            cell.selectionViewOverlay?.isHidden = !showOverlay
+        }
+
+        if model.anyfiles.count == selectedCellIndexPaths.count {
+            isAllSelected = true
+            delegate?.editControllerUpdateIsAllSelected(with: true)
+        }
+
+        let title = getTitle(for: selectedCellIndexPaths.count)
+        delegate?.editControllerSetNavigationItemTitle(with: title)
     }
 
     func collectionView(_ collectionView: UICollectionView, didDeselectItemAt indexPath: IndexPath) {
         selectedCellIndexPaths.remove(indexPath)
+        collectionView.deselectItem(at: indexPath, animated: false)
+
         if selectedCellIndexPaths.isEmpty {
             delegate?.editControllerDidDeSelectMultipleItem(editContrller: self)
         }
         if let cell = collectionView.cellForItem(at: indexPath) as? BaseCollectionViewCell {
             cell.selectionViewOverlay?.isHidden = true
-            cell.isSelected = false
         }
+
+        let title: String?
+
+        if selectedCellIndexPaths.isEmpty {
+            title = nil
+        } else {
+            title = getTitle(for: selectedCellIndexPaths.count)
+        }
+
+        if isAllSelected {
+            isAllSelected = false
+            delegate?.editControllerUpdateIsAllSelected(with: false)
+        }
+
+        delegate?.editControllerSetNavigationItemTitle(with: title)
     }
 
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, referenceSizeForHeaderInSection section: Int) -> CGSize {
@@ -304,7 +366,10 @@ extension EditController: UICollectionViewDataSource {
             cell.isAccessibilityElement = true
             cell.checkImageView?.isHidden = false
 
+            var showOverlay: Bool = true
+
             if let cell = cell as? MediaCollectionViewCell {
+                cell.showCheckmark(true)
                 cell.disableScrollView()
                 if let collectionModel = model as? CollectionModel, collectionModel.mediaCollection is VLCMLPlaylist {
                     cell.dragIndicatorImageView.isHidden = false
@@ -312,6 +377,7 @@ extension EditController: UICollectionViewDataSource {
                     cell.dragIndicatorImageView.isHidden = true
                 }
                 cell.isEditing = true
+                showOverlay = false
             }
             if cell.media is VLCMLMedia || cell.media is VLCMLMediaGroup {
                 cell.secondDescriptionLabelView?.isHidden = false
@@ -319,7 +385,7 @@ extension EditController: UICollectionViewDataSource {
             }
 
             if cell.isSelected {
-                cell.selectionViewOverlay?.isHidden = false
+                cell.selectionViewOverlay?.isHidden = !showOverlay
             }
 
             cell.media = model.anyfiles[indexPath.row]

@@ -57,25 +57,12 @@ class MediaViewController: VLCPagingViewController<VLCLabelCell> {
 
     // MARK: UIMenu & UIActions
 
-    @available(iOS 14.0, *)
-    private lazy var rightMenuItems: [UIMenuElement] = []
-
-    @available(iOS 14.0, *)
     private lazy var menuButton: UIBarButtonItem = {
-        return UIBarButtonItem(image: UIImage(named: "EllipseCircle"))
-    }()
-
-    @available(iOS 14.0, *)
-    private lazy var selectAction: UIAction = {
-        let selectAction = UIAction(title: NSLocalizedString("BUTTON_EDIT", comment: ""),
-                                    image: UIImage(systemName: "checkmark.circle"),
-                                    handler: {
-            [unowned self] _ in
-            customSetEditing()
-        })
-        selectAction.accessibilityLabel = NSLocalizedString("BUTTON_EDIT", comment: "")
-        selectAction.accessibilityHint = NSLocalizedString("BUTTON_EDIT_HINT", comment: "")
-        return selectAction
+        var buttonItem = UIBarButtonItem()
+        buttonItem.image = UIImage(named: "EllipseCircle")
+        buttonItem.accessibilityLabel = NSLocalizedString("BUTTON_MENU", comment: "")
+        buttonItem.accessibilityHint = NSLocalizedString("BUTTON_MENU_HINT", comment: "")
+        return buttonItem
     }()
 
     private lazy var doneButton: UIBarButtonItem = {
@@ -156,16 +143,12 @@ class MediaViewController: VLCPagingViewController<VLCLabelCell> {
         }
 
         if #available(iOS 14.0, *) {
-            // Update menu for new ViewController
             if let viewController = viewController as? MediaCategoryViewController {
                 menuButton.menu = generateMenu(viewController: viewController)
-                leftBarButtons = isEditing ? [selectAllButton] : nil
-                rightBarButtons = isEditing ? [doneButton] : [menuButton]
             }
-        } else {
-            leftBarButtons = isEditing ? [selectAllButton] : [sortButton]
-            rightBarButtons = isEditing ? [doneButton] : rightBarButtonItems()
         }
+        leftBarButtons = isEditing ? [selectAllButton] : leftBarButtonItems(for: viewController)
+        rightBarButtons = isEditing ? [doneButton] : rightBarButtonItems(for: viewController)
 
         var mediaCategoryViewController: UIViewController = self
         if navigationController?.viewControllers.last is ArtistViewController {
@@ -175,15 +158,35 @@ class MediaViewController: VLCPagingViewController<VLCLabelCell> {
             mediaCategoryViewController = viewController
         }
 
+        if navigationController?.viewControllers.last is ArtistViewController,
+           let viewController = viewControllers[currentIndex] as? CollectionCategoryViewController {
+            let playButton = viewController.getPlayAllButton()
+            rightBarButtons?.append(playButton)
+        }
+
         mediaCategoryViewController.navigationItem.leftBarButtonItems = showButtons ? leftBarButtons : nil
         mediaCategoryViewController.navigationItem.rightBarButtonItems = showButtons ? rightBarButtons : nil
     }
 
-    private func rightBarButtonItems() -> [UIBarButtonItem] {
+    private func leftBarButtonItems(for viewController: UIViewController) -> [UIBarButtonItem]? {
+        var leftBarButtonItems = [UIBarButtonItem]()
+
+        if viewController is CollectionCategoryViewController ||
+            viewController is ArtistAlbumCategoryViewController {
+            return nil
+        }
+
+        leftBarButtonItems.append(sortButton)
+
+        return leftBarButtonItems
+    }
+
+    private func rightBarButtonItems(for viewController: UIViewController) -> [UIBarButtonItem] {
         var rightBarButtonItems = [UIBarButtonItem]()
 
         rightBarButtonItems.append(editButton)
-        if navigationController?.viewControllers.last is ArtistViewController {
+        if navigationController?.viewControllers.last is ArtistViewController ||
+            viewController is CollectionCategoryViewController {
             rightBarButtonItems.append(sortButton)
         }
 
@@ -242,16 +245,19 @@ extension MediaViewController: MediaCategoryViewControllerDelegate {
     func updateNavigationBarButtons(for viewController: MediaCategoryViewController, isEditing: Bool) {
         leftBarButtons = isEditing ? [selectAllButton] : nil
         if #available(iOS 14.0, *) {
-            rightBarButtons = isEditing ? [doneButton] : [menuButton]
+            rightBarButtons = isEditing ? [doneButton] : [menuButton, UIBarButtonItem(customView: rendererButton)]
         } else {
             rightBarButtons = isEditing ? [doneButton] : [editButton, sortButton, UIBarButtonItem(customView: rendererButton)]
         }
-
 
         viewController.navigationItem.rightBarButtonItems = rightBarButtons
         viewController.navigationItem.leftBarButtonItems = leftBarButtons
 
         setEditing(isEditing, animated: true)
+    }
+
+    func updateSelectAllButton(for viewController: MediaCategoryViewController) {
+        selectAllButton.image = viewController.isAllSelected ? UIImage(named: "allSelected") : UIImage(named: "emptySelectAll")
     }
 }
 
@@ -405,14 +411,28 @@ extension MediaViewController {
     }
 
     @available(iOS 14.0, *)
+    func generateSelectAction() -> UIAction {
+        let selectAction = UIAction(title: NSLocalizedString("BUTTON_SELECT", comment: ""),
+                                    image: UIImage(systemName: "checkmark.circle"),
+                                    handler: {
+            [unowned self] _ in
+            customSetEditing()
+        })
+        selectAction.accessibilityLabel = NSLocalizedString("BUTTON_SELECT", comment: "")
+        selectAction.accessibilityHint = NSLocalizedString("BUTTON_SELECT_HINT", comment: "")
+        return selectAction
+    }
+
+    @available(iOS 14.0, *)
     func generateMenu(viewController: MediaCategoryViewController?) -> UIMenu {
         guard let mediaCategoryViewController = viewController else {
             preconditionFailure("MediaViewControllers: invalid viewController")
         }
+        let selectAction = generateSelectAction()
         let layoutSubMenu = generateLayoutMenu(with: mediaCategoryViewController)
         let sortSubMenu = generateSortMenu(with: mediaCategoryViewController)
 
-        rightMenuItems = [selectAction, layoutSubMenu, sortSubMenu]
+        var rightMenuItems = [selectAction, layoutSubMenu, sortSubMenu]
 
         if mediaCategoryViewController.model is ArtistModel {
             let isIncludeAllArtistActive = UserDefaults.standard.bool(forKey: kVLCAudioLibraryHideFeatArtists)

@@ -3,6 +3,7 @@ install! 'cocoapods', :deterministic_uuids => false
 inhibit_all_warnings!
 
 def shared_pods
+  use_modular_headers!
   pod 'XKKeychain', '~>1.0'
   pod 'box-ios-sdk-v2', :git => 'https://github.com/fkuehne/box-ios-sdk-v2.git', :commit => '08161e74' #has a our fixes
   pod 'CocoaHTTPServer', :git => 'https://github.com/fkuehne/CocoaHTTPServer.git' # has our fixes
@@ -10,7 +11,7 @@ def shared_pods
   pod 'AFNetworking', '~>4.0'
 
   # debug
-  pod 'SwiftLint', '~> 0.25.0', :configurations => ['Debug']
+  pod 'SwiftLint', '~> 0.47.1', :configurations => ['Debug']
 end
 
 target 'VLC-iOS' do
@@ -19,17 +20,21 @@ target 'VLC-iOS' do
   pod 'OBSlider', '1.1.0'
   pod 'InAppSettingsKit', :git => 'https://github.com/Mikanbu/InAppSettingsKit.git', :commit => 'a429840' #tvOS fix
   pod 'GoogleAPIClientForREST/Drive'
-  pod 'MobileVLCKit', '3.4.1b6'
-  pod 'VLCMediaLibraryKit', '0.11.0b1'
+  pod 'MobileVLCKit', '3.4.1b11'
+  pod 'VLCMediaLibraryKit', '0.11.0b2'
   pod 'GTMAppAuth', '0.7.1'
   pod 'ADAL', :git => 'https://code.videolan.org/fkuehne/azure-activedirectory-library-for-objc.git', :commit => '348e94df'
-  pod 'OneDriveSDK', :git => 'https://code.videolan.org/fkuehne/onedrive-sdk-ios.git', :commit => '810f82da'
   pod 'MarqueeLabel', '4.0.2'
   pod 'ObjectiveDropboxOfficial'
 
   target 'VLC-iOSTests' do
       inherit! :search_paths
   end
+
+  use_modular_headers!
+  pod 'MSGraphClientSDK'
+  pod 'MSGraphClientModels'
+  pod 'MSGraphMSALAuthProvider', :git => 'https://github.com/Mikanbu/msgraph-sdk-objc-auth'
 end
 
 target 'VLC-iOS-Screenshots' do
@@ -41,7 +46,7 @@ target 'VLC-tvOS' do
   platform :tvos, '11.0'
   shared_pods
   pod 'GRKArrayDiff', '~> 2.1'
-  pod 'TVVLCKit', '3.4.1b6'
+  pod 'TVVLCKit', '3.4.1b11'
   pod 'MetaDataFetcherKit', '~>0.5.0'
 end
 
