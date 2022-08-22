@@ -75,34 +75,23 @@
 
 - (void)loadThumbnail
 {
-    // The onedrive Api has no way to cancel a request and the ODThumbnail has no back reference to it's item
-    // so this might lead to wrong thumbnails if the cell is reused since we have no way of cancelling requests or check if the completion is still for the set item
-    ODDriveRequestBuilder *drive = [[ODClient loadCurrentClient] drive];
-    ODThumbnailRequest *request = [[[[drive items:_oneDriveFile.id] thumbnails:@"0"] medium] request];
-    __weak typeof(self) weakSelf = self;
-    [request getWithCompletion:^(ODThumbnail *response, NSError *error) {
-        if (error == nil && response.url) {// we don't care about errors for thumbnails
-            dispatch_async(dispatch_get_main_queue(), ^{
-                 [weakSelf.thumbnailView setImageWithURL:[NSURL URLWithString:response.url]];
-            });
-        }
-    }];
+    // Integrate the thumbnail generation for the OneDrive cells.
 }
 
 - (void)updateOneDriveDisplayAsItem
 {
     int64_t duration = 0;
-    NSString *title = self.oneDriveFile.name;
+    NSString *title = _oneDriveFile.name;
     NSMutableString *subtitle = [[NSMutableString alloc] init];
 
     _downloadButton.hidden = NO;
     _titleLabel.text = title;
 
-    if (_oneDriveFile.audio) {
+    if (_oneDriveFile.audio || title.isSupportedAudioMediaFormat) {
         _thumbnailView.image = [UIImage imageNamed:@"audio"];
         duration = _oneDriveFile.audio.duration;
         [self loadThumbnail];
-    } else if (_oneDriveFile.video) {
+    } else if (_oneDriveFile.video || title.isSupportedMediaFormat) {
         _thumbnailView.image = [UIImage imageNamed:@"movie"];
         duration = _oneDriveFile.video.duration;
         [self loadThumbnail];
@@ -135,7 +124,7 @@
     _oneDriveFile.folder ? [self updateOneDriveDisplayAsFolder] : [self updateOneDriveDisplayAsItem];
 }
 
-- (void)setOneDriveFile:(ODItem *)oneDriveFile
+- (void)setOneDriveFile:(MSGraphDriveItem *)oneDriveFile
 {
     if (oneDriveFile != _oneDriveFile) {
         _oneDriveFile = oneDriveFile;

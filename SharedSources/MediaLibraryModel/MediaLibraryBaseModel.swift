@@ -1,3 +1,4 @@
+import Foundation
 /*****************************************************************************
  * MediaLibraryBaseModel.swift
  *
@@ -41,6 +42,7 @@ protocol MLBaseModel: AnyObject, MediaLibraryBaseModel {
 
     init(medialibrary: MediaLibraryService)
 
+    var fileArrayLock: NSRecursiveLock { get }
     var files: [MLType] { get set }
 
     var medialibrary: MediaLibraryService { get }

@@ -22,6 +22,7 @@ import UIKit
     func updateNavigationBarButtons(for viewController: MediaCategoryViewController, isEditing: Bool)
     @available(iOS 14.0, *)
     func generateMenu(for viewController: MediaCategoryViewController) -> UIMenu
+    func updateSelectAllButton(for viewController: MediaCategoryViewController)
 }
 
 class MediaCategoryViewController: UICollectionViewController, UISearchBarDelegate, IndicatorInfoProvider {
@@ -45,7 +46,7 @@ class MediaCategoryViewController: UICollectionViewController, UISearchBarDelega
         editController.delegate = self
         return editController
     }()
-    private var reloadTimer: Timer? = nil
+    private let reloadLock = NSLock()
     private var cachedCellSize = CGSize.zero
     private var toSize = CGSize.zero
     private var longPressGesture: UILongPressGestureRecognizer!
@@ -65,6 +66,7 @@ class MediaCategoryViewController: UICollectionViewController, UISearchBarDelega
 
     private weak var albumHeader: AlbumHeader?
     private lazy var albumFlowLayout = AlbumHeaderLayout()
+    private lazy var navItemTitle: VLCMarqueeLabel = VLCMarqueeLabel()
 
 //    @available(iOS 11.0, *)
 //    lazy var dragAndDropManager: VLCDragAndDropManager = { () -> VLCDragAndDropManager<T> in
@@ -193,17 +195,17 @@ class MediaCategoryViewController: UICollectionViewController, UISearchBarDelega
             rendererButton.isSelected = true
         }
 
-        let marqueeTitle = VLCMarqueeLabel()
         if let model = model as? CollectionModel,
            let collection = model.mediaCollection as? VLCMLAlbum {
-            title = collection.title
+            navItemTitle.text = collection.title
         } else if let collection = model as? CollectionModel {
-            title = collection.mediaCollection.title()
+            navItemTitle.text = collection.mediaCollection.title()
         }
-        marqueeTitle.text = title
-        marqueeTitle.textColor = PresentationTheme.current.colors.navigationbarTextColor
-        marqueeTitle.font = UIFont.preferredCustomFont(forTextStyle: .headline).bolded
-        self.navigationItem.titleView = marqueeTitle
+
+        navItemTitle.textColor = PresentationTheme.current.colors.navigationbarTextColor
+        navItemTitle.font = UIFont.preferredCustomFont(forTextStyle: .headline).bolded
+
+        self.navigationItem.titleView = navItemTitle
         NotificationCenter.default.addObserver(self, selector: #selector(themeDidChange),
                                                name: .VLCThemeDidChangeNotification, object: nil)
 
@@ -303,10 +305,18 @@ class MediaCategoryViewController: UICollectionViewController, UISearchBarDelega
         ])
     }
 
-    func launchReload() {
+    @objc func reloadData() {
+        defer {
+            reloadLock.unlock()
+        }
+
+        /* this function can be called multiple times from different threads in short
+         * intervalls, but we may not reload the views without the previous to finish */
+        reloadLock.lock()
+
         guard Thread.isMainThread else {
             DispatchQueue.main.async {
-                self.launchReload()
+                self.reloadData()
             }
             return
         }
@@ -329,39 +339,6 @@ class MediaCategoryViewController: UICollectionViewController, UISearchBarDelega
         if isEditing {
             if let editToolbar = tabBarController?.editToolBar() {
                 editToolbar.updateEditToolbar(for: model)
-            }
-        }
-    }
-
-    @objc func fireReloadData() {
-        reloadTimer = nil
-        launchReload()
-    }
-
-    @objc func reloadData() {
-        // Timer set to 0.0 instead of 0.3 seconds because it causes a bug related to the swipe to delete.
-        // The timer was created two times due to several calls to reloadData().
-        // Meanwhile the user could try so swipe to delete and when the timer finally fired, the cell scrolled would be updated.
-        // Leading to another cell being scrolled instead of the first one.
-        let timeInterval: Double = 0.0
-
-        if reloadTimer == nil {
-            DispatchQueue.main.async {
-                if self.reloadTimer == nil {
-                    self.reloadTimer = Timer.scheduledTimer(timeInterval: timeInterval,
-                                                             target: self,
-                                                             selector: #selector(self.fireReloadData),
-                                                             userInfo: nil, repeats: false)
-                }
-            }
-        } else if let reloadTimer = reloadTimer {
-            let nowDate = Date()
-            let fireDate = reloadTimer.fireDate
-            let remainingTime = abs(nowDate.timeIntervalSince(fireDate))
-
-            if remainingTime > 0.0 {
-                //Reset timer's fireDate
-                reloadTimer.fireDate = nowDate.addingTimeInterval(timeInterval)
             }
         }
     }
@@ -392,6 +369,7 @@ class MediaCategoryViewController: UICollectionViewController, UISearchBarDelega
            model.mediaCollection is VLCMLAlbum {
             statusBarView.removeFromSuperview()
             view.addSubview(searchBar)
+            AppearanceManager.setupUserInterfaceStyle(theme: PresentationTheme.current)
         }
     }
 
@@ -414,7 +392,6 @@ class MediaCategoryViewController: UICollectionViewController, UISearchBarDelega
         collectionView.collectionViewLayout.invalidateLayout()
         setupCollectionView() //Fixes crash that is caused due to layout change
         updateCollectionViewForAlbum()
-        reloadData()
         showGuideOnLaunch()
         setNavbarAppearance()
         loadSort()
@@ -517,6 +494,7 @@ class MediaCategoryViewController: UICollectionViewController, UISearchBarDelega
                 }
 
                 navigationItem.titleView?.isHidden = hideNavigationItemTitle
+                albumHeader.updateUserInterfaceStyle(isStatusBarVisible: !hideNavigationItemTitle)
             }
         }
     }
@@ -527,6 +505,9 @@ class MediaCategoryViewController: UICollectionViewController, UISearchBarDelega
             return
         }
         super.setEditing(editing, animated: animated)
+
+        editController.shouldResetCells(!isEditing)
+
         // might have an issue if the old datasource was search
         // Most of the edit logic is handled inside editController
         collectionView?.dataSource = editing ? editController : self
@@ -1342,6 +1323,47 @@ extension MediaCategoryViewController: EditControllerDelegate {
                 navigationItem.titleView?.isHidden = hideNavigationBarTitle
             }
         }
+    }
+
+    func editControllerSetNavigationItemTitle(with title: String?) {
+        var newTitle = title
+
+        if title == nil {
+            if let controller = navigationController?.viewControllers.last as? AudioViewController {
+                controller.resetTitleView()
+                return
+            } else if let controller = navigationController?.viewControllers.last as? ArtistViewController {
+                controller.resetTitleView()
+                return
+            } else if let controller = navigationController?.viewControllers.last as? PlaylistViewController {
+                controller.resetTitleView()
+                return
+            } else if let controller = navigationController?.viewControllers.last as? VideoViewController {
+                controller.resetTitleView()
+                return
+            } else if let controller = navigationController?.viewControllers.last as? CollectionCategoryViewController,
+                      let model = controller.model as? CollectionModel,
+                      let collection = model.mediaCollection as? VLCMLAlbum {
+                newTitle = collection.title
+            } else if let controller = navigationController?.viewControllers.last as? CollectionCategoryViewController,
+                      let model = controller.model as? CollectionModel,
+                      let collection = model.mediaCollection as? VLCMLGenre {
+                newTitle = collection.title()
+            } else if let controller = navigationController?.viewControllers.last as? CollectionCategoryViewController,
+                      let model = controller.model as? CollectionModel,
+                      let collection = model.mediaCollection as? VLCMLPlaylist {
+                newTitle = collection.title()
+            }
+        }
+
+        navItemTitle.text = newTitle
+        navigationController?.viewControllers.last?.navigationItem.titleView = navItemTitle
+        navigationController?.viewControllers.last?.navigationItem.titleView?.sizeToFit()
+    }
+
+    func editControllerUpdateIsAllSelected(with allSelected: Bool) {
+        isAllSelected = allSelected
+        delegate?.updateSelectAllButton(for: self)
     }
 }
 

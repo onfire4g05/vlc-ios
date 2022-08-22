@@ -126,7 +126,10 @@
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {
     NSInteger count = _recentURLs.count;
-    self.nothingFoundView.hidden = count > 0;
+    if (count > 0) {
+        self.nothingFoundView.hidden = YES;
+        self.emptyListButton.hidden = NO;
+    }
     return count;
 }
 
@@ -143,7 +146,9 @@
 - (void)URLEnteredInField:(id)sender
 {
     NSString *urlString = self.playURLField.text;
-    if (urlString.length) {
+    NSURL *url = [NSURL URLWithString:urlString];
+
+    if (url && url.scheme && url.host) {
         if ([_recentURLs indexOfObject:urlString] != NSNotFound)
             [_recentURLs removeObject:urlString];
 

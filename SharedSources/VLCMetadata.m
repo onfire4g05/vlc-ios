@@ -108,9 +108,14 @@
 {
     self.playbackDuration = @(mediaPlayer.media.length.intValue / 1000.);
     self.playbackRate = @(mediaPlayer.rate);
-    self.elapsedPlaybackTime = @(mediaPlayer.time.value.floatValue / 1000.);
+    VLCTime *elapsedPlaybackTime = mediaPlayer.time;
+    if (elapsedPlaybackTime) {
+        self.elapsedPlaybackTime = @(elapsedPlaybackTime.value.floatValue / 1000.);
+    }
     self.position = @(mediaPlayer.position);
-    [[NSNotificationCenter defaultCenter] postNotificationName:VLCPlaybackServicePlaybackMetadataDidChange object:self];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [[NSNotificationCenter defaultCenter] postNotificationName:VLCPlaybackServicePlaybackMetadataDidChange object:self];
+    });
 }
 
 - (void)checkIsAudioOnly:(VLCMediaPlayer *)mediaPlayer
@@ -164,8 +169,12 @@
 
 #if TARGET_OS_IOS
     if (self.artworkImage) {
-        MPMediaItemArtwork *mpartwork = [[MPMediaItemArtwork alloc] initWithImage:self.artworkImage];
-        currentlyPlayingTrackInfo[MPMediaItemPropertyArtwork] = mpartwork;
+        @try {
+            MPMediaItemArtwork *mpartwork = [[MPMediaItemArtwork alloc] initWithImage:self.artworkImage];
+            currentlyPlayingTrackInfo[MPMediaItemPropertyArtwork] = mpartwork;
+        } @catch (NSException *exception) {
+            currentlyPlayingTrackInfo[MPMediaItemPropertyArtwork] = nil;
+        }
     }
 #endif
 

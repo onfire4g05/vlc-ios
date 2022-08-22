@@ -12,10 +12,11 @@
 class VideoModel: MediaModel {
     typealias MLType = VLCMLMedia
 
-    var sortModel = SortModel([.alpha, .duration, .insertionDate, .releaseDate, .fileSize])
+    var sortModel = SortModel([.alpha, .duration, .insertionDate, .releaseDate, .fileSize, .lastPlaybackDate, .playCount])
 
     var observable = Observable<MediaLibraryBaseModelObserver>()
 
+    var fileArrayLock = NSRecursiveLock()
     var files = [VLCMLMedia]()
 
     var cellType: BaseCollectionViewCell.Type {
@@ -31,8 +32,12 @@ class VideoModel: MediaModel {
     var indicatorName: String = NSLocalizedString("ALL_VIDEOS", comment: "")
 
     required init(medialibrary: MediaLibraryService) {
+        defer {
+            fileArrayLock.unlock()
+        }
         self.medialibrary = medialibrary
         medialibrary.observable.addObserver(self)
+        fileArrayLock.lock()
         files = medialibrary.media(ofType: .video)
     }
 }
@@ -41,6 +46,10 @@ class VideoModel: MediaModel {
 
 extension VideoModel {
     func sort(by criteria: VLCMLSortingCriteria, desc: Bool) {
+        defer {
+            fileArrayLock.unlock()
+        }
+        fileArrayLock.lock()
         files = medialibrary.media(ofType: .video,
                                    sortingCriteria: criteria,
                                    desc: desc)
@@ -56,6 +65,10 @@ extension VideoModel {
 
 extension VideoModel: MediaLibraryObserver {
     func medialibrary(_ medialibrary: MediaLibraryService, didAddVideos videos: [VLCMLMedia]) {
+        defer {
+            fileArrayLock.unlock()
+        }
+        fileArrayLock.lock()
         videos.forEach({ append($0) })
         observable.observers.forEach() {
             $0.value.observer?.mediaLibraryBaseModelReloadView()
@@ -64,6 +77,10 @@ extension VideoModel: MediaLibraryObserver {
 
     func medialibrary(_ medialibrary: MediaLibraryService, didModifyVideos videos: [VLCMLMedia]) {
         if !videos.isEmpty {
+            defer {
+                fileArrayLock.unlock()
+            }
+            fileArrayLock.lock()
             files = swapModels(with: videos)
             observable.observers.forEach() {
                 $0.value.observer?.mediaLibraryBaseModelReloadView()
@@ -72,6 +89,10 @@ extension VideoModel: MediaLibraryObserver {
     }
 
     func medialibrary(_ medialibrary: MediaLibraryService, didDeleteMediaWithIds ids: [NSNumber]) {
+        defer {
+            fileArrayLock.unlock()
+        }
+        fileArrayLock.lock()
         files = files.filter() {
             for id in ids where $0.identifier() == id.int64Value {
                 return false
@@ -91,6 +112,10 @@ extension VideoModel: MediaLibraryObserver {
         guard success else {
             return
         }
+        defer {
+            fileArrayLock.unlock()
+        }
+        fileArrayLock.lock()
         files = swapModels(with: [media])
         observable.observers.forEach() {
             $0.value.observer?.mediaLibraryBaseModelReloadView()
