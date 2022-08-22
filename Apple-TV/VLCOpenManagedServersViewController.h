@@ -4,7 +4,7 @@
  * Copyright (c) 2015 VideoLAN. All rights reserved.
  * $Id$
  *
- * Authors: Felix Paul Kühne <fkuehne # videolan.org>
+ * Authors: Justin Osborne <justin # eblah.com>
  *
  * Refer to the COPYING file of the official project for license.
  *****************************************************************************/

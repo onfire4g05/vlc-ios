@@ -78,20 +78,18 @@
     _mainViewController = [[UITabBarController alloc] init];
     _mainViewController.tabBar.barTintColor = [UIColor VLCOrangeTintColor];
     
-    UINavigationController *_managedServers = [[UINavigationController alloc] initWithRootViewController:_openManagedServersVC];
-    
-    NSMutableArray *_viewControllers = [[NSMutableArray alloc]initWithArray:@[
-        [[UINavigationController alloc] initWithRootViewController:_localNetworkVC],
-        [[UINavigationController alloc] initWithRootViewController:_remotePlaybackVC],
-        [[UINavigationController alloc] initWithRootViewController:_openNetworkVC]
-    ]];
+    NSMutableArray *viewControllers = [[NSMutableArray alloc] init];
+    [viewControllers addObject:[[UINavigationController alloc] initWithRootViewController:_localNetworkVC]];
+    [viewControllers addObject:[[UINavigationController alloc] initWithRootViewController:_remotePlaybackVC]];
+    [viewControllers addObject:[[UINavigationController alloc] initWithRootViewController:_openNetworkVC]];
 
     if(_openManagedServersVC.hasManagedServers) {
-        [_viewControllers addObject:_managedServers];
+        [viewControllers addObject:[[UINavigationController alloc] initWithRootViewController:_openManagedServersVC]];
     }
-    [_viewControllers addObject:[[UINavigationController alloc] initWithRootViewController:_settingsVC]];
     
-    [_mainViewController setViewControllers:_viewControllers];
+    [viewControllers addObject:[[UINavigationController alloc] initWithRootViewController:_settingsVC]];
+    
+    [_mainViewController setViewControllers:viewControllers];
 
     self.window.rootViewController = _mainViewController;
 

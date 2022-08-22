@@ -4,7 +4,7 @@
  * Copyright (c) 2015 VideoLAN. All rights reserved.
  * $Id$
  *
- * Authors: Felix Paul Kühne <fkuehne # videolan.org>
+ * Authors: Justin Osborne <justin # eblah.com>
  *
  * Refer to the COPYING file of the official project for license.
  *****************************************************************************/
@@ -20,7 +20,6 @@
     NSMutableArray *_serverList;
     NSDictionary *_managedConf;
 }
-@property (nonatomic) NSIndexPath *currentlyFocusedIndexPath;
 @property (nonatomic) NSMutableArray *serverList;
 @end
 
@@ -32,91 +31,51 @@
 }
 
 - (instancetype)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil {
-    NSDictionary *_managedConf = [NSUserDefaults.standardUserDefaults dictionaryForKey:@"com.apple.configuration.managed"];
+    self = [super initWithNibName:@"VLCOpenManagedServersViewController" bundle:nil];
     
-    if (_managedConf == nil) {
-        _managedConf = @{};
-    }
-    
-    _serverList = [_managedConf mutableArrayValueForKey:@"server-list"];
-
-    return [super initWithNibName:@"VLCOpenManagedServersViewController" bundle:nil];
-}
-
-- (void)viewDidLoad {
-    [super viewDidLoad];
-
-    if (@available(tvOS 13.0, *)) {
-        self.navigationController.navigationBarHidden = YES;
+    if (self) {
+        _managedConf = [NSUserDefaults.standardUserDefaults dictionaryForKey:@"com.apple.configuration.managed"];
+        
+        if (_managedConf != nil) {
+            _serverList = [_managedConf mutableArrayValueForKey:@"server-list"];
+        } else {
+            _managedConf = @{};
+        }
     }
 
-    NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
-    [notificationCenter addObserver:self
-                           selector:@selector(ubiquitousKeyValueStoreDidChange:)
-                               name:NSUbiquitousKeyValueStoreDidChangeExternallyNotification
-                             object:[NSUbiquitousKeyValueStore defaultStore]];
-
-    self.managedServersTableView.backgroundColor = [UIColor clearColor];
-    self.managedServersTableView.rowHeight = UITableViewAutomaticDimension;
-}
-
-- (void)viewWillAppear:(BOOL)animated
-{
-    [self.managedServersTableView reloadData];
-    [super viewWillAppear:animated];
-}
-
-- (void)ubiquitousKeyValueStoreDidChange:(NSNotification *)notification
-{
-    if (![NSThread isMainThread]) {
-        [self performSelectorOnMainThread:@selector(ubiquitousKeyValueStoreDidChange:) withObject:notification waitUntilDone:NO];
-        return;
-    }
-
-    [self.managedServersTableView reloadData];
-}
-
-- (void)viewWillDisappear:(BOOL)animated
-{
-    [super viewWillDisappear:animated];
-
-    /* force update before we leave */
-    [[NSUbiquitousKeyValueStore defaultStore] synchronize];
+    return self;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
 {
-    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"RecentlyPlayedURLsTableViewCell"];
+    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"ManagedServersURLsTableViewCell"];
     if (!cell) {
-        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"RecentlyPlayedURLsTableViewCell"];
+        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"ManagedServersURLsTableViewCell"];
     }
     
-    NSString *content = [_serverList[indexPath.row] objectForKey:@"url"];
-    NSString *possibleTitle = [_serverList[indexPath.row] objectForKey:@"name"];
+    NSDictionary *serverItem = _serverList[indexPath.row];
+    
+    if (serverItem != nil) {
+        NSString *serverUrl = [serverItem objectForKey:@"url"];
+        cell.detailTextLabel.text = serverUrl;
 
-    cell.detailTextLabel.text = content;
-    cell.textLabel.text = (possibleTitle != nil) ? possibleTitle : [content lastPathComponent];
+        NSString *possibleTitle = [serverItem objectForKey:@"name"];
+        cell.textLabel.text = (possibleTitle != nil) ? possibleTitle : [serverUrl lastPathComponent];
+    }
 
     return cell;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
 {
-    NSString *_url = [_serverList[indexPath.row] objectForKey:@"url"];
-    
+    NSString *url = [_serverList[indexPath.row] objectForKey:@"url"];
     [self.managedServersTableView deselectRowAtIndexPath:indexPath animated:NO];
-    [self _openURLStringAndDismiss:_url];
+    [self _openURLStringAndDismiss:(url == nil) ? @"" : url];
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {
-    NSInteger count = _serverList.count;
-    return count;
-}
-
-- (void)tableView:(UITableView *)tableView didHighlightRowAtIndexPath:(NSIndexPath *)indexPath
-{
-    self.currentlyFocusedIndexPath = indexPath;
+    return _serverList.count;
 }
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView
@@ -138,8 +97,7 @@
 }
 
 - (BOOL)hasManagedServers {
-    NSInteger count = _serverList.count;
-    if (count > 0) return YES;
+    if (_serverList.count > 0) return YES;
     else return NO;
 }
 
